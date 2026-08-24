@@ -1,0 +1,10 @@
+id = "commander.watcher"
+name = "Commander Watcher"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+description = "Watches agent status changes. Auto-handles known rules, wakes Commander for unknowns."
+platforms = ["linux", "macos", "windows"]
+
+[[events]]
+on = "pane.agent_status_changed"
+command = ["cmd", "/c", "run-watcher.bat"]

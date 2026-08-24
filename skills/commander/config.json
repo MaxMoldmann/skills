@@ -1,0 +1,17 @@
+{
+  "speak": {
+    "enabled": false,
+    "voice": "am_adam"
+  },
+  "auto_approve_commander_pane": true,
+  "auto_approve_tabs": [],
+  "ignore_segments": [
+    "cd *",
+    "$env:PYTHONUTF8=*",
+    "$env:PYTHONIOENCODING=*",
+    "$env:PYTHONLEGACYWINDOWSSTDIO=*"
+  ],
+  "ignore_segment_regexes": [
+    "^\\$[A-Za-z_][A-Za-z0-9_]*\\s*=\\s*(?:'[^']*'|\"[^\"]*\")$"
+  ]
+}
