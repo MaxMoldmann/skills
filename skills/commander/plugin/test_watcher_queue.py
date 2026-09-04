@@ -464,9 +464,16 @@ Do you want to run this command?
             patch.object(watcher, "MEMORY_DIR", str(state_dir)),
             patch.object(watcher, "STATE_DIR", str(state_dir)),
             patch.object(watcher, "DATA_DIR", str(state_dir)),
-            patch.dict(os.environ, {"HERDR_PLUGIN_EVENT_JSON": json.dumps(event)}, clear=False),
+            patch.dict(
+                os.environ,
+                {
+                    "HERDR_BIN_PATH": "herdr",
+                    "HERDR_PLUGIN_EVENT_JSON": json.dumps(event),
+                },
+                clear=False,
+            ),
             patch.object(watcher, "read_commander_pane", return_value="commander-pane"),
-            patch.object(watcher, "speak_fleet_update"),
+            patch.object(watcher, "speak_fleet_update") as speak,
             patch.object(watcher, "get_tab_label", return_value="Crew tab"),
             patch.object(watcher, "try_auto_handle", return_value=(False, "none", "", 0)),
             patch.object(
@@ -475,10 +482,13 @@ Do you want to run this command?
                 return_value="$ Shell Inspect repository state\ngit status --short\nDo you want to proceed?\n1. Yes",
             ),
             patch.object(watcher, "get_pane_info", return_value=("copilot", r"C:\Repo\crew")),
-            patch.object(watcher, "wake_commander"),
+            patch.object(watcher, "wake_commander") as wake,
         ):
             watcher._main()
             watcher._main()
+
+            speak.assert_called_once_with("herdr", "crew-pane-7", "blocked")
+            wake.assert_called_once_with("herdr", "commander-pane", "crew-pane-7", "blocked")
 
         queue_path = state_dir / "pending-blocks.json"
         self.assertTrue(queue_path.exists())
@@ -502,6 +512,35 @@ Do you want to run this command?
         self.assertEqual(r"C:\Repo\crew", blocked_commands["records"][0]["cwd"])
         self.assertEqual("git status --short", blocked_commands["records"][0]["command"])
 
+        shutil.rmtree(state_dir)
+
+    def test_auto_handled_block_does_not_speak_or_wake_commander(self):
+        state_dir = Path(__file__).parent / ".watcher-auto-handled-speak-state"
+        shutil.rmtree(state_dir, ignore_errors=True)
+        state_dir.mkdir()
+        (state_dir / "config.json").write_text(
+            json.dumps({"auto_approve_commander_pane": True, "auto_approve_tabs": []}),
+            encoding="utf-8",
+        )
+        event = {"data": {"pane_id": "crew-pane-7", "agent_status": "blocked"}}
+
+        with (
+            patch.object(watcher, "MEMORY_DIR", str(state_dir)),
+            patch.object(watcher, "STATE_DIR", str(state_dir)),
+            patch.object(watcher, "DATA_DIR", str(state_dir)),
+            patch.dict(os.environ, {"HERDR_PLUGIN_EVENT_JSON": json.dumps(event)}, clear=False),
+            patch.object(watcher, "read_commander_pane", return_value="commander-pane"),
+            patch.object(watcher, "speak_fleet_update") as speak,
+            patch.object(watcher, "get_tab_label", return_value="Crew tab"),
+            patch.object(watcher, "try_auto_handle", return_value=(True, "rule-1", "git log", 0.9)),
+            patch.object(watcher, "read_pane", return_value=""),
+            patch.object(watcher, "log_decision"),
+            patch.object(watcher, "wake_commander") as wake,
+        ):
+            watcher._main()
+
+        speak.assert_not_called()
+        wake.assert_not_called()
         shutil.rmtree(state_dir)
 
     def test_generic_blocked_user_question_is_not_enqueued(self):

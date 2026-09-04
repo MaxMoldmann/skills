@@ -98,22 +98,29 @@ def _main():
             dlog(f"ignore_blocked_patterns matched, suppressing event pane_id={pane_id}")
             return
 
-    speak_fleet_update(herdr, pane_id, new_status)
-
-    if new_status == "blocked":
         handled, rule_id, cmd, confidence = try_auto_handle(herdr, pane_id, tab_label)
         dlog(f"auto_handle: handled={handled} rule={rule_id}")
         if handled:
             log_decision(tab_label, rule_id, cmd, confidence, auto=True, outcome="approved")
             return
-        pane_output = read_pane(herdr, pane_id)
-        if not _is_shell_approval_block(pane_output):
-            dlog(f"non-approval blocked pane ignored pane_id={pane_id}")
-            wake_commander(herdr, commander_pane, pane_id, new_status)
-            return
-        log_decision(tab_label, "none", cmd, 0, auto=False, outcome="escalated")
-        enqueue_pending_block(herdr, pane_id, tab_label)
 
+        pane_output = read_pane(herdr, pane_id)
+        if _is_shell_approval_block(pane_output):
+            record = enqueue_pending_block(herdr, pane_id, tab_label)
+            if not record:
+                dlog(f"pending block duplicate suppressed pane_id={pane_id}")
+                return
+            log_decision(tab_label, "none", cmd, 0, auto=False, outcome="escalated")
+        else:
+            dlog(f"non-approval blocked pane ignored pane_id={pane_id}")
+
+    if new_status == "done":
+        pane_output = read_pane(herdr, pane_id)
+        if any(hint in pane_output for hint in ("Waiting for background agents", "esc stop agents", "esc to interrupt", "esc interrupt")):
+            dlog(f"suppressing false done event for active pane pane_id={pane_id}")
+            return
+
+    speak_fleet_update(herdr, pane_id, new_status)
     wake_commander(herdr, commander_pane, pane_id, new_status)
 
 
@@ -174,7 +181,10 @@ def _maybe_self_approve(herdr, pane_id):
 
 
 def _is_commander_approval_pane(commander_pane, pane_id, tab_label):
-    return pane_id == commander_pane or tab_label.casefold() == "blocked review"
+    return (
+        bool(commander_pane and pane_id.casefold() == commander_pane.casefold())
+        or tab_label.casefold() in ("commander", "blocked review")
+    )
 
 
 def try_auto_handle(herdr, pane_id, tab_label):
@@ -870,9 +880,10 @@ def speak_fleet_update(herdr, pane_id, status):
 
 
 def wake_commander(herdr, commander_pane, pane_id, status):
-    msg = f"[FLEET UPDATE] {pane_id} → {status}"
+    tab_label = get_tab_label(herdr, pane_id)
+    msg = f"[FLEET UPDATE] {tab_label} ({pane_id}) → {status}"
     subprocess.run(
-        [herdr, "notification", "show", f"Commander — {status}", "--body", pane_id,
+        [herdr, "notification", "show", f"Fleet: {tab_label} — {status}", "--body", pane_id,
          "--position", "top-right", "--sound", "request"],
         capture_output=True,
     )
