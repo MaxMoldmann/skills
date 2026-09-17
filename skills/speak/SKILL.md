@@ -24,7 +24,7 @@ When a user requests voice summaries:
 3. Unless `/speak off` was requested in current session, generate and play a short voice summary, even when the response is only "Done."
 4. Use voice configured in `config.json` unless user requests another voice with `--voice`.
 
-**Do not block the main agent on TTS playback.** Use a headless subagent for all speech (see Subagent pattern below).
+**Do not block the main agent on TTS playback.** Use a headless background agent using the Luna model (`gpt-5.6-luna` or `luna`) for all speech (see Subagent pattern below).
 
 Do NOT use a bare `python` command — it won't find the required packages. The venv is self-contained.
 
@@ -39,12 +39,12 @@ uv pip install --python "$env:USERPROFILE\.copilot\skills\speak\.venv" "https://
 
 ## Subagent pattern
 
-TTS synthesis and playback block the process. To keep the main agent free, always offload speech to a headless subagent. A state file at `%TEMP%\speak-agent-id.txt` tracks the running subagent so a new request can interrupt and replace it.
+TTS synthesis and playback block the process. To keep the main agent free, always offload speech to a headless background agent using the Luna model (`gpt-5.6-luna`). A state file at `%TEMP%\speak-agent-id.txt` tracks the running subagent so a new request can interrupt and replace it.
 
 ### Steps for the main agent
 
 1. **Stop any running speak subagent** — read `%TEMP%\speak-agent-id.txt` if it exists. If a session ID is found, call `swarm stop` on it, then delete the file.
-2. **Spawn a headless subagent** with `spawn_mode: "headless"` and `label: "speak"`. Pass the text and optional `--voice` flag in the prompt (see template below).
+2. **Spawn a headless / background agent** using the **Luna model** (e.g. `model: "gpt-5.6-luna"` / `model: "luna"`), with `mode: "background"` (or `spawn_mode: "headless"`) and `label: "speak"`. Pass the text and optional `--voice` flag in the prompt (see template below).
 3. **Record the new session ID** — write the spawned session ID to `%TEMP%\speak-agent-id.txt`.
 4. **Continue** — the main agent proceeds immediately without waiting.
 
