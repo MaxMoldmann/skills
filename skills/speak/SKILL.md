@@ -41,10 +41,15 @@ uv pip install --python "$env:USERPROFILE\.copilot\skills\speak\.venv" "https://
 
 TTS synthesis and playback block the process. To keep the main agent free and avoid subagent completion noise or follow-up printouts, run speech as an unmanaged background process via PowerShell `Start-Process -WindowStyle Hidden`. A PID file at `$env:TEMP\speak-pid.txt` tracks the running process so any new request can interrupt and replace it.
 
+### Tool calling instructions
+
+- **GitHub Copilot CLI:** ALWAYS set `mode: "async"` on the `powershell` tool call. Never run speech with `mode: "sync"` (the default), otherwise the CLI blocks and delays displaying the response until the shell wrapper exits.
+- **Claude Code:** Pass `run_in_background: true` when running bash/powershell commands for speech.
+
 ### Steps for the main agent
 
 1. **Stop running speak process** — if `$env:TEMP\speak-pid.txt` exists, read the PID and stop it (`Stop-Process -Id <pid> -Force -ErrorAction SilentlyContinue`).
-2. **Launch background process via `Start-Process`** — run `Start-Process` with `-WindowStyle Hidden -PassThru` and write the new process ID (`$proc.Id`) to `$env:TEMP\speak-pid.txt`.
+2. **Launch background process via `Start-Process`** — run `Start-Process` with `-WindowStyle Hidden -PassThru` and write the new process ID (`$proc.Id`) to `$env:TEMP\speak-pid.txt`. In Copilot CLI, invoke this with `mode: "async"`.
 3. **No follow-up printouts** — do NOT print audio status messages (e.g. 'Audio complete', 'All done'). The audio speaks for itself; complete the turn immediately.
 
 ### Command template
